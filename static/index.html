@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>Autism AI Dashboard</title>
+
+<style>
+body{
+margin:0;
+font-family:'Segoe UI';
+background:#0f172a;
+color:white;
+}
+
+.header{
+text-align:center;
+padding:20px;
+font-size:26px;
+background:#020617;
+}
+
+.main{
+display:flex;
+gap:20px;
+padding:20px;
+}
+
+.panel{
+flex:1;
+background:#1e293b;
+padding:20px;
+border-radius:15px;
+box-shadow:0 10px 30px rgba(0,0,0,0.5);
+}
+
+input,select{
+width:100%;
+padding:10px;
+margin:8px 0;
+border-radius:8px;
+border:none;
+font-size:14px;
+}
+
+label{
+font-size:14px;
+color:#cbd5e1;
+}
+
+button{
+width:100%;
+padding:12px;
+background:#3b82f6;
+border:none;
+color:white;
+border-radius:10px;
+cursor:pointer;
+margin-top:10px;
+}
+
+button:hover{
+background:#2563eb;
+}
+
+#video{
+width:100%;
+margin-top:10px;
+border-radius:10px;
+background:black;
+}
+
+#circle{
+width:150px;
+height:150px;
+border-radius:50%;
+background:conic-gradient(#3b82f6 0%, #1e293b 0%);
+display:flex;
+align-items:center;
+justify-content:center;
+margin:auto;
+}
+
+#percent{
+font-size:22px;
+}
+
+#bar{
+height:10px;
+background:#3b82f6;
+width:0%;
+margin-top:20px;
+border-radius:10px;
+}
+
+.result-box{
+margin-top:20px;
+padding:15px;
+border-radius:10px;
+text-align:center;
+}
+
+.low{background:#065f46;}
+.moderate{background:#92400e;}
+.high{background:#7f1d1d;}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="header">🧠 Autism Screening AI Dashboard</div>
+
+<div class="main">
+
+<!-- LEFT PANEL -->
+
+<div class="panel">
+
+<input type="file" id="image">
+
+<input type="number" id="age" placeholder="Age (months)">
+
+<select id="gender">
+<option value="0">Male</option>
+<option value="1">Female</option>
+</select>
+
+<select id="jaundice">
+<option value="0">No Jaundice</option>
+<option value="1">Jaundice</option>
+</select>
+
+<select id="family">
+<option value="0">No Family History</option>
+<option value="1">Family Autism</option>
+</select>
+
+<input type="number" id="heart" placeholder="Heart Rate">
+<input type="number" id="temp" placeholder="Temperature">
+
+<h4>Behavior Questions</h4>
+<div id="questions"></div>
+
+<!-- OPTIONAL EYE TRACKING -->
+
+<h4>Eye Tracking (Optional)</h4>
+
+<label>
+<input type="checkbox" id="useEye"> Enable Eye Tracking
+</label>
+
+<button onclick="startCamera()">Start Camera</button>
+
+<video id="video" autoplay></video>
+
+<button onclick="predict()">🚀 Analyze</button>
+
+</div>
+
+<!-- RIGHT PANEL -->
+
+<div class="panel">
+
+<div id="circle"><span id="percent">0%</span></div>
+
+<div id="bar"></div>
+
+<div id="result" class="result-box">
+No result yet
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+// ✅ FULL QUESTIONS WITH LABELS
+let questionsList = [
+"Does the child make eye contact?",
+"Does the child respond when called by name?",
+"Does the child point to objects to show interest?",
+"Does the child engage in pretend play?",
+"Does the child show interest in other children?",
+"Does the child follow where others point?",
+"Does the child show social smiling?",
+"Does the child use gestures (waving, nodding)?",
+"Does the child show joint attention?",
+"Does the child show repetitive behaviors?"
+]
+
+for(let i=1;i<=10;i++){
+document.getElementById("questions").innerHTML+=`
+<div style="margin-bottom:15px;">
+<label>${questionsList[i-1]}</label>
+<select id="A${i}">
+<option value="0">Typical</option>
+<option value="1">Atypical</option>
+</select>
+</div>
+`
+}
+
+let stream
+
+// ✅ CAMERA CONTROL
+async function startCamera(){
+
+let useEye=document.getElementById("useEye").checked
+
+if(!useEye){
+alert("Enable Eye Tracking first")
+return
+}
+
+let video=document.getElementById("video")
+
+try{
+stream=await navigator.mediaDevices.getUserMedia({video:true})
+video.srcObject=stream
+
+setTimeout(()=>{
+stopCamera()
+alert("Eye tracking completed ✔️")
+},5000)
+
+}catch{
+alert("Camera not available")
+}
+
+}
+
+function stopCamera(){
+if(stream){
+stream.getTracks().forEach(track=>track.stop())
+document.getElementById("video").srcObject=null
+}
+}
+
+// ✅ PREDICTION
+async function predict(){
+
+let fd=new FormData()
+
+fd.append("image",image.files[0])
+fd.append("age_months",age.value)
+fd.append("gender",gender.value)
+fd.append("jaundice",jaundice.value)
+fd.append("family_autism",family.value)
+
+for(let i=1;i<=10;i++){
+fd.append("A"+i,document.getElementById("A"+i).value)
+}
+
+fd.append("heart_rate",heart.value)
+fd.append("temperature",temp.value)
+
+let useEye=document.getElementById("useEye").checked
+fd.append("use_eye_tracking",useEye)
+
+let res=await fetch("/predict",{method:"POST",body:fd})
+let data=await res.json()
+
+let p=Math.round(data.Model_Probability*100)
+
+// circle
+circle.style.background=`conic-gradient(#3b82f6 ${p}%, #1e293b ${p}%)`
+percent.innerText=p+"%"
+
+// bar
+bar.style.width=p+"%"
+
+// result
+result.className="result-box "+data.Autism_Risk.toLowerCase()
+result.innerHTML=`
+<h2>${data.Autism_Risk} Risk</h2>
+<p>Probability: ${data.Model_Probability}</p>
+<p>Eye Score: ${data.Eye_Contact_Score}</p>
+`
+
+}
+
+</script>
+
+</body>
+</html>
